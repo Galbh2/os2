@@ -22,19 +22,46 @@ public class WordCounter implements Runnable {
 
     private byte[] m_Buffer;
 
+    private static final String usage = "Usage: java WordCounter file threads buffer-size";
 
     public static void main (String[] args) {
 
+        if (args.length < 3) {
+            System.out.printf("%s", usage);
+            System.exit(1);
+        }
 
-        String filePath = "WarAndPeace.txt";
-        int bufferSize = 8912;
-        int numOfThreads = 32;
+        String filePath = args[0];
+        int numOfThreads = 0;
+        int bufferSize = 0;
+
+        try {
+             numOfThreads = Integer.valueOf(args[1]);
+             bufferSize = Integer.valueOf(args[2]);
+            if (numOfThreads < 1 || bufferSize < 1) {
+                throw new IllegalArgumentException("You should enter a positive number...");
+            }
+        } catch (NumberFormatException e) {
+            System.err.println("You should enter an integer for the number\n" +
+                    "of threads and buffer size");
+            System.exit(1);
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            System.exit(1);
+        }
 
         File file = new File(filePath);
+
+        if (!file.exists()) {
+            System.err.printf("File not found: %s\n", filePath);
+            System.exit(1);
+        }
+
+        // End of parsing stage
+
         long fileSize = file.length();
         WordCounter[] wordCounters = new WordCounter[numOfThreads];
         Thread[] threads = new Thread[numOfThreads];
-
         long chunk = fileSize / numOfThreads;
         long reminder = fileSize % numOfThreads;
 
