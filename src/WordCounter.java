@@ -20,13 +20,15 @@ public class WordCounter implements Runnable {
     private RandomAccessFile m_RandomFile;
     private byte m_LastChar = 0;
 
+    private byte[] m_Buffer;
+
 
     public static void main (String[] args) {
 
 
         String filePath = "WarAndPeace.txt";
-        int bufferSize = 8192;
-        int numOfThreads = 1;
+        int bufferSize = 8912;
+        int numOfThreads = 32;
 
         File file = new File(filePath);
         long fileSize = file.length();
@@ -35,7 +37,6 @@ public class WordCounter implements Runnable {
 
         long chunk = fileSize / numOfThreads;
         long reminder = fileSize % numOfThreads;
-
 
         // init Threads and WordCounters
         for (int i = 0; i < numOfThreads; i++) {
@@ -50,14 +51,12 @@ public class WordCounter implements Runnable {
             threads[i] = new Thread(wordCounters[i]);
         }
 
-
+        long startTime = System.currentTimeMillis();
 
         // Starts the threads
         for (int i = 0; i < threads.length; i++) {
             threads[i].start();
         }
-
-        long startTime = System.currentTimeMillis();
 
         // makes the thread of main to wait for the workers.
         for (int i = 0; i < threads.length; i++) {
@@ -92,6 +91,7 @@ public class WordCounter implements Runnable {
         m_Offset = i_Offset;
         m_Size = i_Size;
         m_BufferSize = i_BufferSize;
+        m_Buffer = new byte[i_BufferSize];
     }
 
 
@@ -104,15 +104,17 @@ public class WordCounter implements Runnable {
 
             long numOfBytesToRead = m_Size - 1; // -1 because checkFirstChar move the cursor one place forward
             int exceptionCount = 0; // We counting the number of failures in order to avoid infinite loop
+            int bufferSize = 0;
 
             m_Count = checkFirstChar(); // see checkFirstChar doc
 
             while (numOfBytesToRead > 0 && exceptionCount < EXCEPTION_TRESHOLD) {
 
                 try {
-                    byte[] buffer = read(m_RandomFile, m_BufferSize, numOfBytesToRead);
+                    bufferSize = calcBufferSize(numOfBytesToRead, m_BufferSize);
+                    read(m_RandomFile, bufferSize);
                     numOfBytesToRead = numOfBytesToRead - m_BufferSize;
-                    m_Count += countWords(buffer);
+                    m_Count += countWords(m_Buffer, bufferSize);
 
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -138,20 +140,9 @@ public class WordCounter implements Runnable {
 
     }
 
-    /**
-     * Reads i_BufferSize bytes from i_RandomFile into an array of bytes
-     * @param i_RandomFile
-     * @param i_BufferSize
-     * @return array of bytes with the data the was read
-     */
-    private byte[] read(RandomAccessFile i_RandomFile, int i_BufferSize, long i_NumOfBytesToRead) throws IOException {
+    private int calcBufferSize(long i_NumOfBytesToRead, int i_BufferSize) {
 
-        byte[] buffer = null;
-        int bufferSize;
-
-        // We want to avoid trailing zeros in the buffer array,
-        // this situation could only occur when the buffer size is bigger then
-        // the number of bytes left to read in the file.
+        int bufferSize = 0;
 
         if (i_NumOfBytesToRead < i_BufferSize) {
             bufferSize = (int) i_NumOfBytesToRead;
@@ -159,14 +150,30 @@ public class WordCounter implements Runnable {
             bufferSize = i_BufferSize;
         }
 
+        return bufferSize;
+    }
+
+    /**
+     * Reads i_BufferSize bytes from i_RandomFile into an array of bytes
+     * @param i_RandomFile
+     * @param i_BufferSize
+     * @return array of bytes with the data the was read
+     */
+    private void read(RandomAccessFile i_RandomFile, int i_BufferSize) throws IOException {
+
+
+        // We want to avoid trailing zeros in the buffer array,
+        // this situation could only occur when the buffer size is bigger then
+        // the number of bytes left to read in the file.
+
         try {
-            buffer = new byte[bufferSize];
-            i_RandomFile.readFully(buffer);
+           // buffer = new byte[bufferSize];
+            i_RandomFile.read(m_Buffer, 0, i_BufferSize);
         } catch (EOFException e) {
             System.err.println(e);
         }
 
-        return buffer;
+
     }
 
     /**
@@ -250,13 +257,11 @@ public class WordCounter implements Runnable {
      * @return The number of words in a given buffer
      */
 
-    private long countWords(byte[] i_Buffer) {
+    private long countWords(byte[] i_Buffer, int i_BufferSize) {
 
         int counter = 0;
 
-        int i = 0;
-
-        while (i < i_Buffer.length) {
+        for (int i = 0; i < i_BufferSize; i++) {
 
             if (!isCharToAvoid(i_Buffer[i]) &&
                 !isValidChar(i_Buffer[i]) &&
@@ -264,8 +269,9 @@ public class WordCounter implements Runnable {
 
                 counter++;
             }
+
             m_LastChar = i_Buffer[i];
-            i++;
+
         }
 
         return counter;
@@ -296,7 +302,7 @@ public class WordCounter implements Runnable {
      */
 
     private boolean isValidChar(byte i_Char) {
-        System.out.printf("");
+
         boolean b =((i_Char > 64 && i_Char < 91) || (i_Char > 96 && i_Char < 123));
         return b;
     }
